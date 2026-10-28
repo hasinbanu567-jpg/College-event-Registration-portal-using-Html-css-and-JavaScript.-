@@ -1,0 +1,451 @@
+<!index. html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>College Event Registration Portal</title>
+<style>
+:root{
+--ink:#16243f; --ink2:#44526e; --line:#d9deea; --bg:#eef1f7; --card:#ffffff;
+--brand:#0f766e; --brand-d:#0b5a54; --accent:#e8a317; --danger:#b42318; --ok:#067647;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+header{background:var(--ink);color:#fff;padding:22px 16px 0}
+.wrap{max-width:1100px;margin:0 auto}
+header h1{margin:0;font-size:1.6rem}
+header p{margin:4px 0 14px;color:#b9c4dc}
+nav{display:flex;gap:6px}
+nav button{background:transparent;border:0;color:#b9c4dc;padding:10px 18px;font-size:1rem;cursor:pointer;border-bottom:3px solid transparent}
+nav button.active{color:#fff;border-bottom-color:var(--accent)}
+nav button:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+main{padding:20px 16px 60px}
+.filters{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:10px;margin-bottom:18px}
+input,select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:1rem;background:#fff;color:var(--ink)}
+.btn{border:0;border-radius:8px;padding:10px 16px;font-size:.95rem;cursor:pointer;background:var(--brand);color:#fff}
+.btn:hover{background:var(--brand-d)}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.ghost:hover{background:#f3f5fa}
+.btn.danger{background:var(--danger)}
+.btn:disabled{background:#c5cbd8;color:#fff;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.card h3{margin:0;font-size:1.15rem}
+.chip{align-self:flex-start;font-size:.78rem;padding:2px 10px;border-radius:99px;background:#e0f2f0;color:var(--brand-d);font-weight:600}
+.meta{color:var(--ink2);font-size:.92rem}
+.desc{font-size:.95rem;flex:1}
+.stats{font-size:.88rem;color:var(--ink2)}
+.stats b{color:var(--ink)}
+.tag{display:inline-block;font-size:.78rem;padding:2px 8px;border-radius:6px;margin-left:6px}
+.tag.full{background:#fde7e5;color:var(--danger)}
+.tag.reg{background:#dcf5e7;color:var(--ok)}
+.tag.past{background:#e8eaf0;color:var(--ink2)}
+.actions{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.empty{background:#fff;border:1px dashed var(--line);border-radius:12px;padding:30px;text-align:center;color:var(--ink2)}
+.me{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.me input{flex:1;min-width:220px}
+.hidden{display:none!important}
+.overlay{position:fixed;inset:0;background:rgba(10,18,36,.55);display:flex;align-items:center;justify-content:center;padding:14px;z-index:50}
+.modal{background:#fff;border-radius:14px;width:100%;max-width:520px;max-height:92vh;overflow:auto;padding:20px}
+.modal h2{margin:0 0 4px}
+.modal .row{margin-bottom:12px}
+label{display:block;font-weight:600;font-size:.9rem;margin-bottom:4px}
+.err{color:var(--danger);font-size:.84rem;min-height:1em;margin-top:2px}
+.formerr{background:#fde7e5;color:var(--danger);padding:8px 12px;border-radius:8px;margin-bottom:10px}
+.detail dt{font-weight:600;margin-top:10px}
+.detail dd{margin:0;color:var(--ink2)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;z-index:60}
+@media (max-width:760px){.filters{grid-template-columns:1fr 1fr}.filters input:first-child{grid-column:1/-1}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+<div class="wrap">
+<h1>College Event Registration Portal</h1>
+<p>Explore upcoming events, register, and manage your registrations.</p>
+<nav>
+<button id="tabEvents" class="active" type="button">Events</button>
+<button id="tabMine" type="button">My registrations</button>
+</nav>
+</div>
+</header>
+<main class="wrap">
+<section id="viewEvents">
+<div class="filters">
+<input id="fSearch" type="search" placeholder="Search by event name" aria-label="Search by event name">
+<select id="fCategory" aria-label="Filter by category"></select>
+<input id="fDate" type="date" aria-label="Filter by date">
+<button id="fClear" class="btn ghost" type="button">Clear</button>
+</div>
+<div id="eventGrid" class="grid"></div>
+</section>
+<section id="viewMine" class="hidden">
+<div class="me">
+<input id="meEmail" type="email" placeholder="Enter your email to see your registrations" aria-label="Your email">
+<button id="meShow" class="btn" type="button">Show</button>
+</div>
+<div id="mineList" class="grid"></div>
+</section>
+</main>
+<div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
+<div class="modal" id="modalBody"></div>
+</div>
+<div id="toast" class="hidden" role="status"></div>
+<script>
+(function () {
+"use strict";
+var EV_KEY = "cer_events_v1", REG_KEY = "cer_regs_v1", ME_KEY = "cer_me_v1";
+/* ---------- storage helpers (safe) ---------- */
+function load(key, fallback) {
+try {
+var raw = localStorage.getItem(key);
+if (!raw) return fallback;
+var v = JSON.parse(raw);
+return v == null ? fallback : v;
+} catch (e) { return fallback; }
+}
+function save(key, val) {
+try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+catch (e) { return false; }
+}
+/* ---------- date helpers ---------- */
+function pad(n) { return (n < 10 ? "0" : "") + n; }
+function toISO(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function todayISO() { return toISO(new Date()); }
+function plusDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return toISO(d); }
+function fmtDate(iso) {
+var p = iso.split("-");
+var d = new Date(+p[0], +p[1] - 1, +p[2]);
+return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+}
+function isPast(ev) { return ev.date < todayISO(); }
+/* ---------- seed data ---------- */
+function seedEvents() {
+return [
+{ id: 1, title: "Hackathon 2026", category: "Technical", date: plusDays(5), time: "09:00 AM", venue: "Main Auditorium",
+description: "A 24-hour coding challenge to build solutions for real campus problems.",
+details: "Teams of up to 4. Bring your laptop and charger. Food and refreshments provided. Certificates for all participants.",
+capacity: 40, cancellable: true },
+{ id: 2, title: "Annual Cultural Fest", category: "Cultural", date: plusDays(9), time: "05:00 PM", venue: "Open Air Theatre",
+description: "Music, dance and drama performances by students from all departments.",
+details: "Entry through registration only. Please arrive 30 minutes early. Formal or traditional attire recommended.",
+capacity: 120, cancellable: true },
+{ id: 3, title: "Inter-College Cricket Cup", category: "Sports", date: plusDays(12), time: "08:30 AM", venue: "College Ground",
+description: "Knockout cricket tournament featuring teams from nearby colleges.",
+details: "Each team needs 11 players and 2 substitutes. Registration is final and cannot be cancelled once submitted.",
+capacity: 16, cancellable: false },
+{ id: 4, title: "Web Development Workshop", category: "Workshop", date: plusDays(3), time: "10:00 AM", venue: "Computer Lab 2",
+description: "Hands-on session covering HTML, CSS and JavaScript fundamentals.",
+details: "Limited seats. Basic computer knowledge is enough. Laptops are available in the lab.",
+capacity: 30, cancellable: true },
+{ id: 5, title: "Career Guidance Seminar", category: "Seminar", date: plusDays(15), time: "11:00 AM", venue: "Seminar Hall A",
+description: "Industry experts talk about careers, internships and interview preparation.",
+details: "Open to final-year and pre-final-year students. Bring a notebook for the Q&A session.",
+capacity: 80, cancellable: true },
+{ id: 6, title: "Photography Contest", category: "Cultural", date: plusDays(7), time: "02:00 PM", venue: "Art Gallery",
+description: "Submit your best campus photograph and win exciting prizes.",
+details: "Theme: Life on Campus. One entry per student. Photos must be original and unedited.",
+capacity: 5, cancellable: true }
+];
+}
+/* ---------- state ---------- */
+var events = load(EV_KEY, null);
+if (!Array.isArray(events) || events.length === 0) {
+events = seedEvents();
+save(EV_KEY, events);
+}
+var regs = load(REG_KEY, []);
+if (!Array.isArray(regs)) regs = [];
+var me = load(ME_KEY, "");
+if (typeof me !== "string") me = "";
+/* ---------- utilities ---------- */
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+});
+}
+function countFor(id) { return regs.filter(function (r) { return r.eventId === id; }).length; }
+function seatsLeft(ev) { return Math.max(0, ev.capacity - countFor(ev.id)); }
+function findEvent(id) { return events.filter(function (e) { return e.id === id; })[0]; }
+function isRegistered(eventId, email) {
+email = String(email || "").trim().toLowerCase();
+if (!email) return false;
+return regs.some(function (r) { return r.eventId === eventId && r.email === email; });
+}
+function validEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+var toastTimer = null;
+function toast(msg) {
+var t = $("toast");
+t.textContent = msg;
+t.classList.remove("hidden");
+clearTimeout(toastTimer);
+toastTimer = setTimeout(function () { t.classList.add("hidden"); }, 3000);
+}
+/* ---------- filters ---------- */
+function fillCategories() {
+var sel = $("fCategory");
+var cats = [];
+events.forEach(function (e) { if (cats.indexOf(e.category) === -1) cats.push(e.category); });
+cats.sort();
+sel.innerHTML = '<option value="">All categories</option>' +
+cats.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + "</option>"; }).join("");
+}
+function filteredEvents() {
+var q = $("fSearch").value.trim().toLowerCase();
+var cat = $("fCategory").value;
+var date = $("fDate").value;
+return events.filter(function (e) {
+if (q && e.title.toLowerCase().indexOf(q) === -1) return false;
+if (cat && e.category !== cat) return false;
+if (date && e.date !== date) return false;
+return true;
+}).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+}
+/* ---------- render: events ---------- */
+function statusTags(ev) {
+var s = "";
+if (isPast(ev)) s += '<span class="tag past">Closed</span>';
+else if (seatsLeft(ev) === 0) s += '<span class="tag full">Full</span>';
+if (isRegistered(ev.id, me)) s += '<span class="tag reg">Registered</span>';
+return s;
+}
+function renderEvents() {
+var list = filteredEvents();
+var grid = $("eventGrid");
+if (list.length === 0) {
+grid.innerHTML = '<div class="empty" style="grid-column:1/-1">No events match your search. Try clearing the filters.</div>';
+return;
+}
+grid.innerHTML = list.map(function (ev) {
+var left = seatsLeft(ev);
+var blocked = isPast(ev) || left === 0 || isRegistered(ev.id, me);
+var label = isPast(ev) ? "Closed" : left === 0 ? "Event full" : isRegistered(ev.id, me) ? "Registered" : "Register";
+return '<article class="card">' +
+'<span class="chip">' + esc(ev.category) + "</span>" +
+"<h3>" + esc(ev.title) + statusTags(ev) + "</h3>" +
+'<div class="meta">' + esc(fmtDate(ev.date)) + " at " + esc(ev.time) + "<br>" + esc(ev.venue) + "</div>" +
+'<div class="desc">' + esc(ev.description) + "</div>" +
+'<div class="stats"><b>' + countFor(ev.id) + "</b> registered &middot; <b>" + left + "</b> of " + ev.capacity + " seats left</div>" +
+'<div class="actions">' +
+'<button class="btn ghost" type="button" data-act="details" data-id="' + ev.id + '">Details</button>' +
+'<button class="btn" type="button" data-act="register" data-id="' + ev.id + '"' + (blocked ? " disabled" : "") + ">" + label + "</button>" +
+"</div></article>";
+}).join("");
+}
+/* ---------- render: my registrations ---------- */
+function renderMine() {
+var box = $("mineList");
+var email = $("meEmail").value.trim().toLowerCase();
+if (!email) {
+box.innerHTML = '<div class="empty" style="grid-column:1/-1">Enter your email to see the events you registered for.</div>';
+return;
+}
+if (!validEmail(email)) {
+box.innerHTML = '<div class="empty" style="grid-column:1/-1">Please enter a valid email address.</div>';
+return;
+}
+var mine = regs.filter(function (r) { return r.email === email; });
+if (mine.length === 0) {
+box.innerHTML = '<div class="empty" style="grid-column:1/-1">No registrations found for this email.</div>';
+return;
+}
+box.innerHTML = mine.map(function (r) {
+var ev = findEvent(r.eventId);
+if (!ev) return "";
+var canCancel = ev.cancellable && !isPast(ev);
+var note = !ev.cancellable ? "Cancellation is not permitted for this event." :
+isPast(ev) ? "This event has already taken place." : "";
+return '<article class="card">' +
+'<span class="chip">' + esc(ev.category) + "</span>" +
+"<h3>" + esc(ev.title) + "</h3>" +
+'<div class="meta">' + esc(fmtDate(ev.date)) + " at " + esc(ev.time) + "<br>" + esc(ev.venue) + "</div>" +
+'<div class="stats">Registered as <b>' + esc(r.name) + "</b> (" + esc(r.roll) + ")</div>" +
+(note ? '<div class="stats">' + esc(note) + "</div>" : "") +
+'<div class="actions">' +
+'<button class="btn ghost" type="button" data-act="details" data-id="' + ev.id + '">Details</button>' +
+'<button class="btn danger" type="button" data-act="cancel" data-rid="' + r.id + '"' + (canCancel ? "" : " disabled") + ">Cancel registration</button>" +
+"</div></article>";
+}).join("");
+}
+/* ---------- modal ---------- */
+function openModal(html) {
+$("modalBody").innerHTML = html;
+$("overlay").classList.remove("hidden");
+}
+function closeModal() {
+$("overlay").classList.add("hidden");
+$("modalBody").innerHTML = "";
+}
+function showDetails(id) {
+var ev = findEvent(id);
+if (!ev) return;
+var left = seatsLeft(ev);
+openModal(
+'<h2>' + esc(ev.title) + "</h2>" +
+'<span class="chip">' + esc(ev.category) + "</span>" +
+'<dl class="detail">' +
+"<dt>Date and time</dt><dd>" + esc(fmtDate(ev.date)) + ", " + esc(ev.time) + "</dd>" +
+"<dt>Venue</dt><dd>" + esc(ev.venue) + "</dd>" +
+"<dt>About</dt><dd>" + esc(ev.description) + "</dd>" +
+"<dt>More information</dt><dd>" + esc(ev.details) + "</dd>" +
+"<dt>Registrations</dt><dd>" + countFor(ev.id) + " registered, " + left + " of " + ev.capacity + " seats left</dd>" +
+"<dt>Cancellation</dt><dd>" + (ev.cancellable ? "Allowed until the event date" : "Not permitted") + "</dd>" +
+"</dl>" +
+'<div class="actions" style="margin-top:16px">' +
+'<button class="btn ghost" type="button" data-act="close">Close</button>' +
+'<button class="btn" type="button" data-act="register" data-id="' + ev.id + '"' +
+(isPast(ev) || left === 0 || isRegistered(ev.id, me) ? " disabled" : "") + ">Register</button></div>"
+);
+}
+function showForm(id) {
+var ev = findEvent(id);
+if (!ev) return;
+openModal(
+"<h2>Register for " + esc(ev.title) + "</h2>" +
+'<p class="meta">' + esc(fmtDate(ev.date)) + " &middot; " + esc(ev.venue) + " &middot; " + seatsLeft(ev) + " seats left</p>" +
+'<div id="formErr"></div>' +
+'<form id="regForm" novalidate data-id="' + ev.id + '">' +
+'<div class="row"><label for="rName">Full name</label><input id="rName" type="text" autocomplete="name"><div class="err" id="eName"></div></div>' +
+'<div class="row"><label for="rEmail">Email</label><input id="rEmail" type="email" autocomplete="email" value="' + esc(me) + '"><div class="err" id="eEmail"></div></div>' +
+'<div class="row"><label for="rRoll">Roll number</label><input id="rRoll" type="text"><div class="err" id="eRoll"></div></div>' +
+'<div class="row"><label for="rDept">Department</label><select id="rDept">' +
+'<option value="">Select department</option><option>Computer Science</option><option>Electronics</option>' +
+'<option>Mechanical</option><option>Civil</option><option>Commerce</option><option>Arts and Science</option></select>' +
+'<div class="err" id="eDept"></div></div>' +
+'<div class="row"><label for="rPhone">Phone number</label><input id="rPhone" type="tel" inputmode="numeric" maxlength="10"><div class="err" id="ePhone"></div></div>' +
+'<div class="actions"><button class="btn ghost" type="button" data-act="close">Cancel</button>' +
+'<button class="btn" type="submit">Submit registration</button></div>' +
+"</form>"
+);
+var first = $("rName");
+if (first) first.focus();
+}
+function submitForm(form) {
+var id = Number(form.getAttribute("data-id"));
+var ev = findEvent(id);
+var vals = {
+name: $("rName").value.trim(),
+email: $("rEmail").value.trim().toLowerCase(),
+roll: $("rRoll").value.trim(),
+dept: $("rDept").value,
+phone: $("rPhone").value.trim()
+};
+var errs = {};
+if (!vals.name) errs.eName = "Enter your full name.";
+else if (vals.name.length < 3) errs.eName = "Name must have at least 3 characters.";
+if (!vals.email) errs.eEmail = "Enter your email.";
+else if (!validEmail(vals.email)) errs.eEmail = "Enter a valid email, like name@college.edu.";
+if (!vals.roll) errs.eRoll = "Enter your roll number.";
+if (!vals.dept) errs.eDept = "Select your department.";
+if (!vals.phone) errs.ePhone = "Enter your phone number.";
+else if (!/^[0-9]{10}$/.test(vals.phone)) errs.ePhone = "Phone number must be exactly 10 digits.";
+["eName", "eEmail", "eRoll", "eDept", "ePhone"].forEach(function (k) {
+$(k).textContent = errs[k] || "";
+});
+$("formErr").innerHTML = "";
+if (Object.keys(errs).length) return;
+if (!ev) { $("formErr").innerHTML = '<div class="formerr">This event no longer exists.</div>'; return; }
+if (isPast(ev)) { $("formErr").innerHTML = '<div class="formerr">Registration is closed for this event.</div>'; return; }
+if (isRegistered(ev.id, vals.email)) {
+$("formErr").innerHTML = '<div class="formerr">This email is already registered for this event.</div>';
+return;
+}
+if (seatsLeft(ev) <= 0) {
+$("formErr").innerHTML = '<div class="formerr">Sorry, this event is full.</div>';
+return;
+}
+var nextId = regs.reduce(function (m, r) { return Math.max(m, r.id); }, 0) + 1;
+regs.push({
+id: nextId, eventId: ev.id, name: vals.name, email: vals.email,
+roll: vals.roll, dept: vals.dept, phone: vals.phone, at: new Date().toISOString()
+});
+if (!save(REG_KEY, regs)) {
+regs.pop();
+$("formErr").innerHTML = '<div class="formerr">Could not save. Check that browser storage is enabled.</div>';
+return;
+}
+me = vals.email;
+save(ME_KEY, me);
+$("meEmail").value = me;
+closeModal();
+toast("Registered for " + ev.title);
+renderEvents();
+renderMine();
+}
+function cancelReg(rid) {
+var r = regs.filter(function (x) { return x.id === rid; })[0];
+if (!r) return;
+var ev = findEvent(r.eventId);
+if (!ev || !ev.cancellable || isPast(ev)) { toast("Cancellation is not permitted."); return; }
+if (!window.confirm("Cancel your registration for " + ev.title + "?")) return;
+regs = regs.filter(function (x) { return x.id !== rid; });
+save(REG_KEY, regs);
+toast("Registration cancelled");
+renderEvents();
+renderMine();
+}
+/* ---------- tabs ---------- */
+function showTab(name) {
+var mine = name === "mine";
+$("viewEvents").classList.toggle("hidden", mine);
+$("viewMine").classList.toggle("hidden", !mine);
+$("tabEvents").classList.toggle("active", !mine);
+$("tabMine").classList.toggle("active", mine);
+if (mine) renderMine(); else renderEvents();
+}
+/* ---------- events wiring ---------- */
+document.addEventListener("click", function (e) {
+var t = e.target.closest ? e.target.closest("[data-act]") : null;
+if (t && !t.disabled) {
+var act = t.getAttribute("data-act");
+if (act === "details") showDetails(Number(t.getAttribute("data-id")));
+else if (act === "register") showForm(Number(t.getAttribute("data-id")));
+else if (act === "cancel") cancelReg(Number(t.getAttribute("data-rid")));
+else if (act === "close") closeModal();
+return;
+}
+if (e.target === $("overlay")) closeModal();
+});
+document.addEventListener("submit", function (e) {
+if (e.target && e.target.id === "regForm") {
+e.preventDefault();
+submitForm(e.target);
+}
+});
+document.addEventListener("keydown", function (e) {
+if (e.key === "Escape") closeModal();
+});
+$("tabEvents").addEventListener("click", function () { showTab("events"); });
+$("tabMine").addEventListener("click", function () { showTab("mine"); });
+$("fSearch").addEventListener("input", renderEvents);
+$("fCategory").addEventListener("change", renderEvents);
+$("fDate").addEventListener("change", renderEvents);
+$("fClear").addEventListener("click", function () {
+$("fSearch").value = ""; $("fCategory").value = ""; $("fDate").value = "";
+renderEvents();
+});
+$("meShow").addEventListener("click", function () {
+var v = $("meEmail").value.trim().toLowerCase();
+if (validEmail(v)) { me = v; save(ME_KEY, me); }
+renderMine();
+renderEvents();
+});
+$("meEmail").addEventListener("keydown", function (e) {
+if (e.key === "Enter") $("meShow").click();
+});
+window.addEventListener("storage", function () {
+regs = load(REG_KEY, []);
+renderEvents();
+renderMine();
+});
+/* ---------- init ---------- */
+fillCategories();
+$("meEmail").value = me;
+renderEvents();
+renderMine();
+})();
+</script>
+</body>
+</html>
